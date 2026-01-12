@@ -17,7 +17,7 @@ I analyzed five GitHub repositories to find which ones use Python as their main 
 | Repository | Python % | Python-Primary? |
 |------------|----------|-----------------|
 | [aio-libs/aiokafka](https://github.com/aio-libs/aiokafka) | 93.1% | Yes |
-| [airbytehq/airbyte](https://github.com/airbytehq/airbyte) | 52.9% | No |
+| [airbytehq/airbyte](https://github.com/airbytehq/airbyte) | 52.8% | No |
 | [artefactual/archivematica](https://github.com/artefactual/archivematica) | 84.5% | Yes |
 | [beetbox/beets](https://github.com/beetbox/beets) | 96.1% | Yes |
 | [FoundationAgents/MetaGPT](https://github.com/FoundationAgents/MetaGPT) | 97.5% | Yes |
