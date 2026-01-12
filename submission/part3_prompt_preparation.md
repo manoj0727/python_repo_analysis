@@ -21,12 +21,12 @@
 
 | Aspect | Description |
 |--------|-------------|
-| **What it does** | Async Kafka client for Python. Produces and consumes messages without blocking the event loop. |
-| **Main components** | `AIOKafkaProducer` (publish), `AIOKafkaConsumer` (read), shared client layer for connections |
-| **Target users** | Backend devs building microservices, data pipelines, event-driven systems with async frameworks (FastAPI, aiohttp) |
-| **Problem it solves** | Traditional Kafka clients block on network I/O. This breaks asyncio's cooperative multitasking. aiokafka gives native async/await support. |
+| **What it does** | Its an async Kafka client for Python. Lets you produce and consume messages without blocking your event loop. |
+| **Main components** | `AIOKafkaProducer` for publishing messages, `AIOKafkaConsumer` for reading them, plus a shared client layer that handles all the connection stuff |
+| **Target users** | Backend developers working on microservices, data pipelines, that kind of thing. People using async frameworks like FastAPI or aiohttp who need Kafka. |
+| **Problem it solves** | Regular Kafka clients block on network I/O which totally breaks asyncio's model. This gives you proper async/await support. |
 
-The client layer manages TCP sockets to Kafka brokers, handles metadata discovery, and implements the wire protocol. Consumer groups let multiple app instances share partition workload automatically.
+The client layer is what manages TCP sockets to the Kafka brokers, figures out which broker has which partition, and implements the wire protocol. Consumer groups are pretty handy - they let you run multiple instances of your app and the partitions get shared automatically.
 
 ---
 
@@ -37,24 +37,25 @@ The client layer manages TCP sockets to Kafka brokers, handles metadata discover
 | Before | After |
 |--------|-------|
 | One socket per broker: `{node_id: conn}` | Two sockets per broker: `{(node_id, group): conn}` |
-| Fetches and coordinator share socket | Fetches use `DEFAULT`, coordinator uses `COORDINATION` |
-| Slow fetch blocks heartbeats | Each group has independent socket |
+| Fetches and coordinator shared the same socket | Fetches go through `DEFAULT`, coordinator uses `COORDINATION` |
+| Slow fetch could block heartbeats | Each group gets its own independent socket |
 
 ### Why It's Needed
 
-Kafka protocol = synchronous per socket. Send request → wait for response → send next.
+Heres the thing about Kafka - its synchronous per socket. You send a request, wait for the response, then you can send the next one.
 
-Problem scenario:
-1. Fetch request starts with 500ms timeout
-2. Coordinator needs to send heartbeat
-3. Heartbeat waits behind fetch
-4. Coordinator thinks consumer died → triggers rebalance
+So picture this:
+1. Fetch request starts, has a 500ms timeout
+2. Meanwhile coordinator needs to send a heartbeat
+3. Heartbeat sits there waiting behind the fetch
+4. Broker thinks consumer is dead because no heartbeat
+5. Triggers rebalance, everything breaks
 
-This happens when coordinator broker = partition leader broker (same node, shared socket).
+This happens specifically when the coordinator broker is the same as your partition leader (same node, shared socket).
 
 ### The Fix
 
-Add `ConnectionGroup` enum: `DEFAULT=0`, `COORDINATION=1`. Change dict key from `node_id` to `(node_id, group)`. Coordinator requests go through dedicated socket.
+Add a `ConnectionGroup` enum with two values: `DEFAULT=0` and `COORDINATION=1`. Change the dictionary key from just `node_id` to `(node_id, group)`. Now coordinator requests get their own socket and dont have to wait.
 
 ---
 
@@ -62,14 +63,14 @@ Add `ConnectionGroup` enum: `DEFAULT=0`, `COORDINATION=1`. Change dict key from 
 
 | # | Criterion | Condition | Expected Behavior |
 |---|-----------|-----------|-------------------|
-| 1 | ConnectionGroup enum | Import client module | `ConnectionGroup.DEFAULT=0`, `ConnectionGroup.COORDINATION=1` available |
-| 2 | Tuple keys | Check `_conns` dict | Keys are `(node_id, group)` not just `node_id` |
-| 3 | Default parameter | Call `_get_conn(node)` without group | Uses `DEFAULT` group automatically |
-| 4 | Coordinator routing | Coordinator sends heartbeat/commit | Uses `COORDINATION` group |
-| 5 | Coordinator discovery | FindCoordinator request | Uses `DEFAULT` group (it's metadata, not coordination) |
-| 6 | Bootstrap format | Initial connection | Stored as `('bootstrap', DEFAULT)` |
-| 7 | Independence | One group's connection fails | Other group unaffected |
-| 8 | Tests pass | Run test suite | No regressions after updating for tuple keys |
+| 1 | ConnectionGroup enum exists | Import client module | Should have `ConnectionGroup.DEFAULT=0` and `ConnectionGroup.COORDINATION=1` |
+| 2 | Tuple keys in use | Look at `_conns` dict | Keys should be `(node_id, group)` tuples not plain `node_id` |
+| 3 | Default parameter works | Call `_get_conn(node)` without specifying group | Should use `DEFAULT` group |
+| 4 | Coordinator routing correct | Coordinator sends heartbeat or commit | Must use `COORDINATION` group |
+| 5 | Coordinator discovery | FindCoordinator request | Uses `DEFAULT` because its really just metadata |
+| 6 | Bootstrap format | Initial connection setup | Should be stored as `('bootstrap', DEFAULT)` |
+| 7 | Groups are independent | One group's connection fails | Other group should keep working fine |
+| 8 | Tests still pass | Run the test suite | No regressions after updating for tuple keys |
 
 ---
 
@@ -77,11 +78,11 @@ Add `ConnectionGroup` enum: `DEFAULT=0`, `COORDINATION=1`. Change dict key from 
 
 | Edge Case | Scenario | Expected Behavior |
 |-----------|----------|-------------------|
-| **Same node** | Coordinator and partition leader on broker 3 | Two sockets to node 3. Fetch doesn't block heartbeat. |
-| **Partial failure** | COORDINATION socket dies, DEFAULT still active | DEFAULT keeps working. Coordinator rediscovers separately. |
-| **Concurrent requests** | Two coroutines request connections to same node, different groups | No race condition. Both get their own socket. |
-| **Version check** | `check_version()` iterates connections | Only checks `DEFAULT` group (COORDINATION may not exist yet) |
-| **Shutdown** | `close()` called with multiple groups active | All connections closed. No orphaned sockets. |
+| **Same node situation** | Coordinator and partition leader both on broker 3 | Should have two separate sockets to node 3. Fetch shouldn't block heartbeat. |
+| **Partial failure** | COORDINATION socket dies but DEFAULT still working | DEFAULT keeps doing its thing. Coordinator rediscovers on its own. |
+| **Concurrent requests** | Two coroutines both want connections to same node but different groups | No race condition. Each gets their own socket. |
+| **Version check** | `check_version()` iterates through connections | Only checks `DEFAULT` group since COORDINATION might not exist yet |
+| **Shutdown** | `close()` called when multiple groups are active | All connections get closed. No sockets left hanging. |
 
 ---
 
