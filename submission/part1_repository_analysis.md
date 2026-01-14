@@ -132,9 +132,9 @@ Multi-agent system where each agent has a specific role. They follow SOPs (stand
 
 ---
 
-## Summary that i analyzed from information that there m
 
-**Python-primary repos (4):**
+
+**In short i can say about Python-primary repos (4):**
 1. aiokafka (93.1%) - async kafka client
 2. archivematica (84.5%) - digital preservation
 3. beets (96.1%) - music library manager
@@ -143,6 +143,7 @@ Multi-agent system where each agent has a specific role. They follow SOPs (stand
 **Not Python-primary (1):**
 1. airbyte (52.9%) - too much Kotlin/Java
 
+**Conclusion :**
 Looking at all of them, they solve completely different problems but they all show good Python practices. I noticed plugin systems are a common pattern - both beets and archivematica use them heavily. And async shows up a lot when theres heavy I/O (aiokafka obviously, but MetaGPT too for API calls).
 
 ---
