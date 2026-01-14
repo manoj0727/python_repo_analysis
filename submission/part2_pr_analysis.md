@@ -25,7 +25,7 @@ When you have a fetch request sitting there with like a 500ms timeout, everythin
 
 The worst part? If your coordinator happens to live on the same broker as your partition leader, the heartbeats get blocked behind fetches. Coordinator thinks the consumer died, triggers a rebalance, and suddenly everything goes haywire.
 
-This was reported in issues [#137](https://github.com/aio-libs/aiokafka/issues/137) and [#128](https://github.com/aio-libs/aiokafka/issues/128).
+This was reported in issues that i found  [#137](https://github.com/aio-libs/aiokafka/issues/137) and [#128](https://github.com/aio-libs/aiokafka/issues/128).
 
 ### The Solution
 
@@ -40,7 +40,7 @@ Pretty simple actually - split the connections into groups. Fetch operations use
 | `tests/test_client.py` | modified | Had to update tests for the new tuple-based connection IDs |
 | `tests/test_consumer.py` | modified | Fixed coordinator tests |
 
-### How It Works
+### How It Works and code
 
 Before the change:
 ```
@@ -122,7 +122,7 @@ Few things I noticed about the design:
 
 ---
 
-## Comparison
+## Comparison and Conclusion from my point of view
 
 | Aspect | aiokafka #196 | beets #3478 |
 |--------|---------------|-------------|
